@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Fuzzy-Unlogic/prgate/v1.0.0-alpha/schema/guardrails.schema.json",
+  "guardrails": {
+    "protected": [
+      ".github/workflows/**",
+      "netlify.toml",
+      "guardrails.prgate.json"
+    ],
+    "source_of_truth": [],
+    "is_hard_blocker": false
+  }
+}

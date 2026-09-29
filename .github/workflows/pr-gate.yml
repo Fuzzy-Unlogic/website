@@ -1,0 +1,16 @@
+name: PR Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write # post/update the sticky comment
+
+jobs:
+  pr-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # prgate reads guardrails.prgate.json from the workspace
+      - uses: Fuzzy-Unlogic/prgate@v1.0.0-alpha
