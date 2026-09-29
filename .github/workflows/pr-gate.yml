@@ -12,4 +12,5 @@ jobs:
   pr-gate:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4 # prgate reads guardrails.prgate.json from the workspace
       - uses: Fuzzy-Unlogic/prgate@v1.0.0-alpha
