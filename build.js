@@ -8,14 +8,19 @@
 // No framework, no client-side JS — just plain static HTML that reuses the
 // existing notepad theme in style.css. Run with `npm run build`.
 
-import { readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync, copyFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import matter from "gray-matter";
 import { marked } from "marked";
 
-const ROOT = import.meta.dirname;
+const ROOT = dirname(fileURLToPath(import.meta.url));
 const POSTS_DIR = join(ROOT, "posts");
-const BLOG_DIR = join(ROOT, "blog");
+const OUT_DIR = join(ROOT, "dist"); // Netlify publish dir — keeps node_modules/posts/build.js off the CDN.
+const BLOG_DIR = join(OUT_DIR, "blog");
+
+// Root static files copied verbatim into the publish dir.
+const STATIC_FILES = ["index.html", "style.css"];
 
 // Netlify exposes the primary site URL as `URL` at build time.
 const SITE_URL = (process.env.URL || "https://fuzzy-unlogic.netlify.app").replace(/\/$/, "");
@@ -83,15 +88,34 @@ function loadPosts() {
     if (!data.title || !data.date) {
       throw new Error(`posts/${file}: frontmatter must include "title" and "date".`);
     }
-    const date = new Date(data.date).toISOString().slice(0, 10);
+    // YAML parses a bare YYYY-MM-DD to a UTC Date; any other string is
+    // normalised to UTC midnight so the displayed day never shifts by timezone.
+    const parsed =
+      data.date instanceof Date ? data.date : new Date(`${String(data.date).trim()}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new Error(`posts/${file}: invalid date ${JSON.stringify(data.date)} — use YYYY-MM-DD.`);
+    }
     return {
+      file,
       slug: slugify(file),
       title: String(data.title),
-      date,
+      date: parsed.toISOString().slice(0, 10),
       summary: data.summary ? String(data.summary) : "",
       html: marked.parse(content),
     };
   });
+
+  // Fail loudly if two files collapse to the same slug — otherwise one would
+  // silently overwrite the other on disk while both appear in the index.
+  const seen = new Map();
+  for (const p of posts) {
+    if (seen.has(p.slug)) {
+      throw new Error(
+        `Duplicate slug "${p.slug}" from ${seen.get(p.slug)} and ${p.file}. Rename one file.`
+      );
+    }
+    seen.set(p.slug, p.file);
+  }
 
   // Newest first.
   posts.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -178,16 +202,21 @@ function build() {
   const posts = loadPosts();
 
   // Fresh output each run.
-  rmSync(BLOG_DIR, { recursive: true, force: true });
+  rmSync(OUT_DIR, { recursive: true, force: true });
   mkdirSync(BLOG_DIR, { recursive: true });
+
+  // Copy the hand-written static site into the publish dir.
+  for (const name of STATIC_FILES) {
+    copyFileSync(join(ROOT, name), join(OUT_DIR, name));
+  }
 
   for (const post of posts) {
     writeFileSync(join(BLOG_DIR, `${post.slug}.html`), renderPost(post));
   }
   writeFileSync(join(BLOG_DIR, "index.html"), renderIndex(posts));
-  writeFileSync(join(ROOT, "feed.xml"), renderFeed(posts));
+  writeFileSync(join(OUT_DIR, "feed.xml"), renderFeed(posts));
 
-  console.log(`Built ${posts.length} post(s) → blog/, feed.xml`);
+  console.log(`Built ${posts.length} post(s) → dist/`);
 }
 
 build();

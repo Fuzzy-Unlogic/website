@@ -4,6 +4,9 @@
   "description": "Fuzzy Unlogic static site + markdown-indexed blog.",
   "type": "module",
   "private": true,
+  "engines": {
+    "node": ">=20.11"
+  },
   "scripts": {
     "build": "node build.js"
   },
