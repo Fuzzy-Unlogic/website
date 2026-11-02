@@ -73,6 +73,44 @@ body {
   border-radius: 2px;
 }
 
+/* --- main menu --- */
+.main-nav {
+  margin-bottom: 2rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px dashed var(--line);
+  font-size: 0.85rem;
+}
+.main-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1.2rem;
+}
+.main-nav a {
+  color: var(--ink-dim);
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.main-nav a::before {
+  content: "› ";
+  color: var(--accent);
+}
+.main-nav a:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+.main-nav a[aria-current="page"] {
+  color: #fff;
+  background: var(--accent-soft);
+}
+.main-nav a:focus-visible {
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+}
+
 .masthead { margin-bottom: 2.6rem; }
 
 h1 {

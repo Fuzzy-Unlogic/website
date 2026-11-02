@@ -9,7 +9,7 @@
 // existing notepad theme in style.css. Run with `npm run build`.
 
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync, copyFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import matter from "gray-matter";
 import { marked } from "marked";
@@ -19,8 +19,23 @@ const POSTS_DIR = join(ROOT, "posts");
 const OUT_DIR = join(ROOT, "dist"); // Netlify publish dir — keeps node_modules/posts/build.js off the CDN.
 const BLOG_DIR = join(OUT_DIR, "blog");
 
-// Root static files copied verbatim into the publish dir.
-const STATIC_FILES = ["index.html", "style.css"];
+// Root static files copied verbatim into the publish dir (index.html is
+// handled separately so the main menu can be injected).
+const STATIC_FILES = ["style.css"];
+
+// Images that live next to a post in posts/ and are referenced by relative
+// path; copied beside the generated post pages in dist/blog/.
+const POST_ASSET_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif"]);
+
+// Main menu — single source of truth, rendered on every page (including the
+// hand-written index.html via its <!-- @nav --> placeholder).
+const NAV_ITEMS = [
+  { key: "home", label: "home", href: "/" },
+  { key: "blog", label: "blog", href: "/blog/" },
+  { key: "rss", label: "rss", href: "/feed.xml" },
+  { key: "github", label: "github", href: "https://github.com/Fuzzy-Unlogic", external: true },
+];
+const NAV_PLACEHOLDER = "<!-- @nav -->";
 
 // Netlify exposes the primary site URL as `URL` at build time.
 const SITE_URL = (process.env.URL || "https://fuzzy-unlogic.netlify.app").replace(/\/$/, "");
@@ -48,8 +63,27 @@ const formatDate = (iso) =>
     timeZone: "UTC",
   });
 
+// Reusable main menu. `active` is the NAV_ITEMS key for the current section.
+function renderNav(active) {
+  const links = NAV_ITEMS.map((item) => {
+    const attrs = [
+      `href="${item.href}"`,
+      item.key === active ? 'aria-current="page"' : "",
+      item.external ? 'target="_blank" rel="noopener noreferrer"' : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return `        <li><a ${attrs}>${esc(item.label)}</a></li>`;
+  }).join("\n");
+  return `    <nav class="main-nav" aria-label="Main">
+      <ul>
+${links}
+      </ul>
+    </nav>`;
+}
+
 // Shared page shell — mirrors index.html so generated pages match the theme.
-function renderPage({ title, description, cssHref, bodyHtml }) {
+function renderPage({ title, description, cssHref, bodyHtml, active }) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -64,6 +98,7 @@ function renderPage({ title, description, cssHref, bodyHtml }) {
 <body>
   <main class="notepad" role="main">
     <div class="tape" aria-hidden="true"></div>
+${renderNav(active)}
 ${bodyHtml}
     <footer class="colophon">
       <p><a href="/">&larr; fuzzy-unlogic</a> &middot; <a href="${SITE_URL}/feed.xml">rss</a></p>
@@ -135,6 +170,7 @@ ${post.html}
     title: `${post.title} — ${SITE_TITLE}`,
     description: post.summary || SITE_DESC,
     cssHref: "../style.css",
+    active: "blog",
     bodyHtml: body,
   });
 }
@@ -168,6 +204,7 @@ ${items || '        <li class="tool"><p class="tool-desc">Nothing written yet.</
     title: `blog — ${SITE_TITLE}`,
     description: `Writing from ${SITE_TITLE}.`,
     cssHref: "../style.css",
+    active: "blog",
     bodyHtml: body,
   });
 }
@@ -209,9 +246,20 @@ function build() {
   for (const name of STATIC_FILES) {
     copyFileSync(join(ROOT, name), join(OUT_DIR, name));
   }
+  // index.html is hand-written; inject the shared menu at its placeholder.
+  const home = readFileSync(join(ROOT, "index.html"), "utf8");
+  if (!home.includes(NAV_PLACEHOLDER)) {
+    throw new Error(`index.html: missing ${NAV_PLACEHOLDER} placeholder for the main menu.`);
+  }
+  writeFileSync(join(OUT_DIR, "index.html"), home.replace(NAV_PLACEHOLDER, renderNav("home")));
 
   for (const post of posts) {
     writeFileSync(join(BLOG_DIR, `${post.slug}.html`), renderPost(post));
+  }
+  for (const file of readdirSync(POSTS_DIR)) {
+    if (POST_ASSET_EXTS.has(extname(file).toLowerCase())) {
+      copyFileSync(join(POSTS_DIR, file), join(BLOG_DIR, file));
+    }
   }
   writeFileSync(join(BLOG_DIR, "index.html"), renderIndex(posts));
   writeFileSync(join(OUT_DIR, "feed.xml"), renderFeed(posts));
